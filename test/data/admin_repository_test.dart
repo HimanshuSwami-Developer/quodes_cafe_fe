@@ -1,4 +1,7 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:mocktail/mocktail.dart';
 import 'package:quodes_gaming/core/network/api_client.dart';
 import 'package:quodes_gaming/data/models/admin_models.dart';
@@ -157,6 +160,41 @@ void main() {
         data: created.toJson(),
       ),
     ).called(1);
+  });
+
+  test('uploadGameCover posts multipart and parses cover_url', () async {
+    final file = XFile.fromData(Uint8List(4), name: 'cover.png');
+    when(
+      () => api.upload<Map<String, dynamic>>(
+        'admin/games/9/cover/',
+        files: any(named: 'files'),
+      ),
+    ).thenAnswer(
+      (_) async => {
+        'id': 9,
+        'name': 'Valorant',
+        'cover_url':
+            'https://res.cloudinary.com/x/image/upload/v1/quodes/games/val.png',
+      },
+    );
+    final g = await repo.uploadGameCover(9, file);
+    expect(g.coverUrl, contains('res.cloudinary.com'));
+    verify(
+      () => api.upload<Map<String, dynamic>>(
+        'admin/games/9/cover/',
+        files: {'cover': file},
+      ),
+    ).called(1);
+  });
+
+  test('removeGameCover deletes then reloads the game', () async {
+    when(() => api.delete('admin/games/9/cover/')).thenAnswer((_) async {});
+    when(
+      () => api.get<Map<String, dynamic>>('admin/games/9/'),
+    ).thenAnswer((_) async => {'id': 9, 'name': 'Valorant', 'cover_url': null});
+    final g = await repo.removeGameCover(9);
+    expect(g.coverUrl, isNull);
+    verify(() => api.delete('admin/games/9/cover/')).called(1);
   });
 
   test('deleteGame calls DELETE', () async {

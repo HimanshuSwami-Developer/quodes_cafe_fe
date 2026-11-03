@@ -185,6 +185,7 @@ class AdminGame extends Equatable {
     this.maxPlayers = 4,
     this.isActive = true,
     this.sort = 0,
+    this.coverUrl,
   });
 
   AdminGame.fromJson(Map<String, dynamic> j)
@@ -197,7 +198,10 @@ class AdminGame extends Equatable {
       platforms = List<String>.from(j['platforms'] ?? const []),
       maxPlayers = _i(j['max_players'], 4),
       isActive = j['is_active'] ?? true,
-      sort = _i(j['sort']);
+      sort = _i(j['sort']),
+      coverUrl = (j['cover_url'] as String?)?.isNotEmpty == true
+          ? j['cover_url'] as String
+          : null;
 
   /// 0 for a game not saved yet.
   final int id;
@@ -208,7 +212,25 @@ class AdminGame extends Equatable {
   final int maxPlayers, sort;
   final bool isActive;
 
+  /// Tile image (set with its own upload call, never sent in [toJson]).
+  final String? coverUrl;
+
   bool get isNew => id == 0;
+
+  /// Same game with another [id] (a retry after a create must update it).
+  AdminGame withId(int id) => AdminGame(
+    id: id,
+    name: name,
+    mono: mono,
+    genre: genre,
+    hue: hue,
+    deep: deep,
+    platforms: platforms,
+    maxPlayers: maxPlayers,
+    isActive: isActive,
+    sort: sort,
+    coverUrl: coverUrl,
+  );
 
   Map<String, dynamic> toJson() => {
     'name': name,
@@ -234,6 +256,7 @@ class AdminGame extends Equatable {
     maxPlayers,
     isActive,
     sort,
+    coverUrl,
   ];
 }
 

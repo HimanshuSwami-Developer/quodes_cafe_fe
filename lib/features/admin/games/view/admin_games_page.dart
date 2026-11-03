@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../../data/models/admin_models.dart';
 import '../../../../data/repositories/admin_repository.dart';
@@ -109,14 +112,28 @@ class _GamesView extends StatelessWidget {
   }
 }
 
-/// Tile art: the design export when one exists, else a hue→deep gradient.
+/// Tile art: the uploaded cover, else the design export, else a hue→deep
+/// gradient with the short code.
 class _Art extends StatelessWidget {
-  const _Art({required this.mono, required this.hue, required this.deep});
+  const _Art({
+    required this.mono,
+    required this.hue,
+    required this.deep,
+    this.url,
+  });
   final String mono, hue, deep;
+  final String? url;
 
   @override
   Widget build(BuildContext context) {
-    if (mono.isNotEmpty && GameArt.has(mono)) return GameArt(mono);
+    final painted = _painted();
+    if (GameArt.has(mono, url)) {
+      return GameArt(mono, url: url, fallback: painted);
+    }
+    return painted;
+  }
+
+  Widget _painted() {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -161,7 +178,12 @@ class _GameTile extends StatelessWidget {
               children: [
                 Opacity(
                   opacity: game.isActive ? 1 : 0.45,
-                  child: _Art(mono: game.mono, hue: game.hue, deep: game.deep),
+                  child: _Art(
+                    mono: game.mono,
+                    hue: game.hue,
+                    deep: game.deep,
+                    url: game.coverUrl,
+                  ),
                 ),
                 Positioned(
                   top: 8,
@@ -277,7 +299,10 @@ class _GameDialogState extends State<_GameDialog> {
     'max_players',
     'is_active',
     'sort',
+    'cover',
   ];
+
+  static const _maxCoverBytes = 5 * 1024 * 1024;
 
   late final g = widget.initial;
   late final _name = TextEditingController(text: g.name);
@@ -291,6 +316,45 @@ class _GameDialogState extends State<_GameDialog> {
       : adminGenres.first;
   late final Set<String> _platforms = {...g.platforms};
   late bool _active = g.isActive;
+
+  /// Newly picked cover (uploaded on Save) and its bytes for the preview.
+  XFile? _cover;
+  Uint8List? _coverBytes;
+
+  /// Remove the current cover on Save.
+  bool _removeCover = false;
+
+  bool get _hasCover =>
+      _coverBytes != null || (!_removeCover && g.coverUrl != null);
+
+  Future<void> _pickCover() async {
+    try {
+      final x = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        imageQuality: 88,
+      );
+      if (x == null) return;
+      final bytes = await x.readAsBytes();
+      if (bytes.length > _maxCoverBytes) {
+        if (mounted) showToast(context, 'Cover must be under 5 MB');
+        return;
+      }
+      setState(() {
+        _cover = x;
+        _coverBytes = bytes;
+        _removeCover = false;
+      });
+    } catch (e) {
+      if (mounted) showToast(context, 'Couldn’t open the image: $e');
+    }
+  }
+
+  void _clearCover() => setState(() {
+    _cover = null;
+    _coverBytes = null;
+    _removeCover = g.coverUrl != null;
+  });
 
   @override
   void dispose() {
@@ -322,7 +386,11 @@ class _GameDialogState extends State<_GameDialog> {
       isActive: _active,
       sort: int.tryParse(_sort.text) ?? 0,
     );
-    final saved = await context.read<GameFormCubit>().save(draft);
+    final saved = await context.read<GameFormCubit>().save(
+      draft,
+      cover: _cover,
+      removeCover: _removeCover,
+    );
     if (saved != null && mounted) Navigator.of(context).pop(saved);
   }
 
@@ -364,14 +432,48 @@ class _GameDialogState extends State<_GameDialog> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: SizedBox(
-                width: 200,
-                height: 90,
-                child: _Art(
-                  mono: _mono.text.trim(),
-                  hue: _hue.text.trim(),
-                  deep: _deep.text.trim(),
-                ),
+                width: 240,
+                height: 128,
+                child: _coverBytes != null
+                    ? Image.memory(_coverBytes!, fit: BoxFit.cover)
+                    : _Art(
+                        mono: _mono.text.trim(),
+                        hue: _hue.text.trim(),
+                        deep: _deep.text.trim(),
+                        url: _removeCover ? null : g.coverUrl,
+                      ),
               ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            children: [
+              TextButton.icon(
+                onPressed: saving ? null : _pickCover,
+                icon: const Icon(Icons.image_outlined, size: 18),
+                label: Text(_hasCover ? 'Change cover' : 'Upload cover'),
+              ),
+              if (_hasCover)
+                TextButton.icon(
+                  onPressed: saving ? null : _clearCover,
+                  icon: const Icon(Icons.hide_image_outlined, size: 18),
+                  label: const Text('Remove'),
+                  style: TextButton.styleFrom(foregroundColor: Q.red),
+                ),
+            ],
+          ),
+          Text(
+            s.errorFor('cover') ??
+                'Landscape PNG/JPG/WebP, max 5 MB. Without a cover the tile '
+                    'uses the short code and colours.',
+            textAlign: TextAlign.center,
+            style: body(
+              12,
+              color: s.errorFor('cover') != null
+                  ? Theme.of(context).colorScheme.error
+                  : Q.text3,
             ),
           ),
           const SizedBox(height: 16),

@@ -1,3 +1,5 @@
+import 'package:image_picker/image_picker.dart' show XFile;
+
 import '../../core/network/api_client.dart';
 import '../models/admin_models.dart';
 
@@ -92,6 +94,27 @@ class AdminRepository {
   );
 
   Future<void> deleteGame(int id) => _api.delete('${_base}games/$id/');
+
+  Future<AdminGame> game(int id) => _one(
+    _api.get<Map<String, dynamic>>('${_base}games/$id/'),
+    AdminGame.fromJson,
+  );
+
+  /// Uploads [file] as the game's tile image (PNG/JPG/WebP, max 5 MB);
+  /// the server stores it on Cloudinary and drops the previous one.
+  Future<AdminGame> uploadGameCover(int id, XFile file) => _one(
+    _api.upload<Map<String, dynamic>>(
+      '${_base}games/$id/cover/',
+      files: {'cover': file},
+    ),
+    AdminGame.fromJson,
+  );
+
+  /// Removes the cover; the app falls back to the built-in tile art.
+  Future<AdminGame> removeGameCover(int id) async {
+    await _api.delete('${_base}games/$id/cover/');
+    return game(id);
+  }
 
   // ---- Station types & stations ----
 

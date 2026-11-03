@@ -1,5 +1,8 @@
 import 'package:bloc_test/bloc_test.dart';
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:mocktail/mocktail.dart';
 import 'package:quodes_gaming/core/bloc/load_status.dart';
 import 'package:quodes_gaming/core/network/api_exception.dart';
@@ -12,7 +15,10 @@ class MockAdminRepository extends Mock implements AdminRepository {}
 
 void main() {
   late MockAdminRepository repo;
-  setUpAll(() => registerFallbackValue(const AdminGame()));
+  setUpAll(() {
+    registerFallbackValue(const AdminGame());
+    registerFallbackValue(XFile.fromData(Uint8List(0)));
+  });
   setUp(() => repo = MockAdminRepository());
 
   const draft = AdminGame(
@@ -74,4 +80,70 @@ void main() {
           .having((s) => s.fieldErrors, 'fieldErrors', isEmpty),
     ],
   );
+
+  test('uploads the picked cover after saving', () async {
+    final file = XFile.fromData(Uint8List(4), name: 'c.png');
+    when(() => repo.saveGame(any())).thenAnswer(
+      (_) async => AdminGame.fromJson({'id': 9, 'name': 'Valorant'}),
+    );
+    when(() => repo.uploadGameCover(9, file)).thenAnswer(
+      (_) async =>
+          AdminGame.fromJson({'id': 9, 'name': 'Valorant', 'cover_url': 'u'}),
+    );
+    final saved = await GameFormCubit(repo).save(draft, cover: file);
+    expect(saved?.coverUrl, 'u');
+  });
+
+  test(
+    'a failed cover upload then Save again updates, not duplicates',
+    () async {
+      final file = XFile.fromData(Uint8List(4), name: 'c.png');
+      final saves = <AdminGame>[];
+      when(() => repo.saveGame(any())).thenAnswer((i) async {
+        saves.add(i.positionalArguments.first as AdminGame);
+        return AdminGame.fromJson({'id': 9, 'name': 'Valorant'});
+      });
+      var fail = true;
+      when(() => repo.uploadGameCover(9, file)).thenAnswer((_) async {
+        if (fail) {
+          throw const ApiException(
+            ApiErrorType.validation,
+            'Upload a PNG, JPG or WebP image.',
+            statusCode: 400,
+            data: {
+              'cover': ['Upload a PNG, JPG or WebP image.'],
+            },
+          );
+        }
+        return AdminGame.fromJson({
+          'id': 9,
+          'name': 'Valorant',
+          'cover_url': 'u',
+        });
+      });
+      final cubit = GameFormCubit(repo);
+
+      expect(await cubit.save(draft, cover: file), isNull);
+      expect(cubit.state.errorFor('cover'), isNotNull);
+
+      fail = false;
+      expect((await cubit.save(draft, cover: file))?.coverUrl, 'u');
+      expect(saves.map((g) => g.id), [0, 9]);
+    },
+  );
+
+  test('removeCover only calls the API when there is a cover', () async {
+    when(() => repo.saveGame(any())).thenAnswer(
+      (_) async =>
+          AdminGame.fromJson({'id': 9, 'name': 'Valorant', 'cover_url': 'u'}),
+    );
+    when(() => repo.removeGameCover(9)).thenAnswer(
+      (_) async => AdminGame.fromJson({'id': 9, 'name': 'Valorant'}),
+    );
+    final saved = await GameFormCubit(
+      repo,
+    ).save(draft.withId(9), removeCover: true);
+    expect(saved?.coverUrl, isNull);
+    verify(() => repo.removeGameCover(9)).called(1);
+  });
 }

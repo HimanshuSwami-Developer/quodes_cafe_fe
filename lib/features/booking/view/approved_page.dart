@@ -202,8 +202,23 @@ class _ApprovedViewState extends State<_ApprovedView>
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Q.greenDeep),
                             ),
-                            child: GameArt.has(b.game?.mono ?? '')
-                                ? SizedBox.expand(child: GameArt(b.game!.mono))
+                            child:
+                                GameArt.has(
+                                  b.game?.mono ?? '',
+                                  b.game?.coverUrl,
+                                )
+                                ? SizedBox.expand(
+                                    child: GameArt(
+                                      b.game!.mono,
+                                      url: b.game!.coverUrl,
+                                      fallback: Center(
+                                        child: Text(
+                                          b.game!.mono,
+                                          style: display(14, color: Q.green),
+                                        ),
+                                      ),
+                                    ),
+                                  )
                                 : Text(
                                     b.game?.mono ?? '',
                                     style: display(14, color: Q.green),

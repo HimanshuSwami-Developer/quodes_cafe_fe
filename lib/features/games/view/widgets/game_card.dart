@@ -113,8 +113,16 @@ class _GameTileState extends State<GameTile> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          if (GameArt.has(g.mono))
-                            GameArt(g.mono)
+                          if (GameArt.has(g.mono, g.coverUrl))
+                            GameArt(
+                              g.mono,
+                              url: g.coverUrl,
+                              fallback: _Fallback(
+                                game: g,
+                                hue: hue,
+                                deep: deep,
+                              ),
+                            )
                           else
                             _Fallback(game: g, hue: hue, deep: deep),
                           const CustomPaint(painter: _Scanlines()),

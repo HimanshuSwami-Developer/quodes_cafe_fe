@@ -83,6 +83,9 @@ class Game {
   final List<String> platformNames;
   final int maxPlayers;
 
+  /// Cover image uploaded in the admin panel (Cloudinary URL), or null.
+  final String? coverUrl;
+
   Game.fromJson(Map<String, dynamic> j)
     : id = j['id'] ?? 0,
       name = j['name'] ?? '',
@@ -94,7 +97,14 @@ class Game {
       platformNames = List<String>.from(
         j['platform_names'] ?? j['platforms'] ?? const [],
       ),
-      maxPlayers = j['max_players'] ?? 4;
+      maxPlayers = j['max_players'] ?? 4,
+      coverUrl = _url(j['cover_url']);
+}
+
+/// Non-empty string or null.
+String? _url(Object? v) {
+  final s = v?.toString().trim() ?? '';
+  return s.isEmpty ? null : s;
 }
 
 class StationType {
