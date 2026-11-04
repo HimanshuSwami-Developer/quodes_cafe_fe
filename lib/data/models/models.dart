@@ -83,8 +83,11 @@ class Game {
   final List<String> platformNames;
   final int maxPlayers;
 
-  /// Cover image uploaded in the admin panel (Cloudinary URL), or null.
+  /// Portrait poster for the Games grid (admin upload), or null.
   final String? coverUrl;
+
+  /// Landscape image for the booking screen (admin upload), or null.
+  final String? bannerUrl;
 
   Game.fromJson(Map<String, dynamic> j)
     : id = j['id'] ?? 0,
@@ -98,7 +101,8 @@ class Game {
         j['platform_names'] ?? j['platforms'] ?? const [],
       ),
       maxPlayers = j['max_players'] ?? 4,
-      coverUrl = _url(j['cover_url']);
+      coverUrl = _url(j['cover_url']),
+      bannerUrl = _url(j['banner_url']);
 }
 
 /// Non-empty string or null.

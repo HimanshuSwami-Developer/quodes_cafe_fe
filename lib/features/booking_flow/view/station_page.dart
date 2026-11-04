@@ -6,6 +6,7 @@ import '../../../core/router/routes.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../theme/colors.dart';
+import '../../../theme/game_art.dart';
 import '../../../theme/theme.dart';
 import '../../../theme/widgets.dart';
 import '../bloc/booking_flow_cubit.dart';
@@ -117,43 +118,7 @@ class _StationView extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                if (g != null)
-                  Panel(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: hexColor(g.hue).withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: hexColor(g.hue)),
-                          ),
-                          child: Text(g.mono, style: display(14)),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${g.genre} · UP TO ${g.maxPlayers} PLAYERS',
-                                style: label(11, color: Q.link),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                g.name,
-                                style: body(16, weight: FontWeight.w800),
-                              ),
-                            ],
-                          ),
-                        ),
-                        TextLink('Change', onTap: () => popOrGames(context)),
-                      ],
-                    ),
-                  ),
+                if (g != null) _GameBanner(game: g),
                 const SizedBox(height: 14),
                 Semantics(
                   label: 'Station type',
@@ -534,6 +499,90 @@ class _SeatGrid extends StatelessWidget {
           }).toList(),
         );
       },
+    );
+  }
+}
+
+/// Selected game's cover art across the top of the booking screen.
+class _GameBanner extends StatelessWidget {
+  const _GameBanner({required this.game});
+  final Game game;
+
+  @override
+  Widget build(BuildContext context) {
+    final g = game;
+    final hue = hexColor(g.hue);
+    final deep = hexColor(g.deep, Q.surface);
+    final fallback = ColoredBox(
+      color: Color.alphaBlend(hue.withValues(alpha: 0.25), deep),
+      child: Center(
+        child: Text(g.mono, style: display(28, color: Colors.white)),
+      ),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 170,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ColoredBox(
+              color: deep,
+              child: GameArt.has(g.mono, g.bannerUrl ?? g.coverUrl)
+                  ? GameArt(
+                      g.mono,
+                      url: g.bannerUrl ?? g.coverUrl,
+                      fallback: fallback,
+                    )
+                  : fallback,
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.3, 1],
+                  colors: [Color(0x00000000), Color(0xE6050A1C)],
+                ),
+              ),
+            ),
+            Positioned(
+              left: 14,
+              right: 14,
+              bottom: 12,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${g.genre} · UP TO ${g.maxPlayers} PLAYERS',
+                          style: label(11, color: Colors.white70),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          g.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: body(
+                            18,
+                            color: Colors.white,
+                            weight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextLink('Change', onTap: () => popOrGames(context)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

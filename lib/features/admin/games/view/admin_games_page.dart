@@ -10,6 +10,7 @@ import '../../../../theme/colors.dart';
 import '../../../../theme/game_art.dart';
 import '../../../../theme/theme.dart';
 import '../../../../theme/widgets.dart';
+import '../../common/bloc/save_cubit.dart';
 import '../../common/bloc/admin_list_cubit.dart';
 import '../../common/view/admin_ui.dart';
 import '../bloc/admin_games_cubit.dart';
@@ -91,21 +92,29 @@ class _GamesView extends StatelessWidget {
         onRetry: () => context.read<AdminGamesCubit>().load(),
         emptyIcon: Icons.sports_esports_outlined,
         emptyText: 'No games yet. Add the first one.',
-        builder: (games) => GridView.builder(
-          padding: const EdgeInsets.only(bottom: 24),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 300,
-            mainAxisExtent: 286,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
-          ),
-          itemCount: games.length,
-          itemBuilder: (_, i) => _GameTile(
-            game: games[i],
-            busy: s.busyIds.contains(games[i].id),
-            onEdit: () => _edit(context, games[i]),
-            onDelete: () => _delete(context, games[i]),
-          ),
+        builder: (games) => LayoutBuilder(
+          builder: (context, box) {
+            // Phone-width screens get portrait cover tiles, wider ones the
+            // landscape banner.
+            final portrait = box.maxWidth < 600;
+            return GridView.builder(
+              padding: const EdgeInsets.only(bottom: 24),
+              gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: portrait ? 220 : 300,
+                mainAxisExtent: portrait ? 400 : 286,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+              ),
+              itemCount: games.length,
+              itemBuilder: (_, i) => _GameTile(
+                portrait: portrait,
+                game: games[i],
+                busy: s.busyIds.contains(games[i].id),
+                onEdit: () => _edit(context, games[i]),
+                onDelete: () => _delete(context, games[i]),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -154,12 +163,14 @@ class _Art extends StatelessWidget {
 
 class _GameTile extends StatelessWidget {
   const _GameTile({
+    required this.portrait,
     required this.game,
     required this.busy,
     required this.onEdit,
     required this.onDelete,
   });
   final AdminGame game;
+  final bool portrait;
   final bool busy;
   final VoidCallback onEdit, onDelete;
 
@@ -170,7 +181,7 @@ class _GameTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(
-          height: 120,
+          height: portrait ? 220 : 120,
           child: ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             child: Stack(
@@ -182,7 +193,9 @@ class _GameTile extends StatelessWidget {
                     mono: game.mono,
                     hue: game.hue,
                     deep: game.deep,
-                    url: game.coverUrl,
+                    url: portrait
+                        ? game.coverUrl ?? game.bannerUrl
+                        : game.bannerUrl ?? game.coverUrl,
                   ),
                 ),
                 Positioned(
@@ -300,6 +313,7 @@ class _GameDialogState extends State<_GameDialog> {
     'is_active',
     'sort',
     'cover',
+    'banner',
   ];
 
   static const _maxCoverBytes = 5 * 1024 * 1024;
@@ -317,17 +331,11 @@ class _GameDialogState extends State<_GameDialog> {
   late final Set<String> _platforms = {...g.platforms};
   late bool _active = g.isActive;
 
-  /// Newly picked cover (uploaded on Save) and its bytes for the preview.
-  XFile? _cover;
-  Uint8List? _coverBytes;
+  /// Newly picked images (uploaded on Save) and removals of current ones.
+  final _cover = _PickedImage();
+  final _banner = _PickedImage();
 
-  /// Remove the current cover on Save.
-  bool _removeCover = false;
-
-  bool get _hasCover =>
-      _coverBytes != null || (!_removeCover && g.coverUrl != null);
-
-  Future<void> _pickCover() async {
+  Future<void> _pick(_PickedImage slot) async {
     try {
       final x = await ImagePicker().pickImage(
         source: ImageSource.gallery,
@@ -337,24 +345,86 @@ class _GameDialogState extends State<_GameDialog> {
       if (x == null) return;
       final bytes = await x.readAsBytes();
       if (bytes.length > _maxCoverBytes) {
-        if (mounted) showToast(context, 'Cover must be under 5 MB');
+        if (mounted) showToast(context, 'Image must be under 5 MB');
         return;
       }
       setState(() {
-        _cover = x;
-        _coverBytes = bytes;
-        _removeCover = false;
+        slot.file = x;
+        slot.bytes = bytes;
+        slot.remove = false;
       });
     } catch (e) {
       if (mounted) showToast(context, 'Couldn’t open the image: $e');
     }
   }
 
-  void _clearCover() => setState(() {
-    _cover = null;
-    _coverBytes = null;
-    _removeCover = g.coverUrl != null;
+  void _clear(_PickedImage slot, String? current) => setState(() {
+    slot.file = null;
+    slot.bytes = null;
+    slot.remove = current != null;
   });
+
+  Widget _imageSlot({
+    required String title,
+    required String hint,
+    required String field,
+    required _PickedImage slot,
+    required String? current,
+    required double width,
+    required double height,
+    required bool saving,
+    required SaveState<AdminGame> s,
+  }) {
+    final has = slot.bytes != null || (!slot.remove && current != null);
+    final err = s.errorFor(field);
+    return Column(
+      children: [
+        Text(title, style: body(13, weight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: width,
+            height: height,
+            child: slot.bytes != null
+                ? Image.memory(slot.bytes!, fit: BoxFit.cover)
+                : _Art(
+                    mono: _mono.text.trim(),
+                    hue: _hue.text.trim(),
+                    deep: _deep.text.trim(),
+                    url: slot.remove ? null : current,
+                  ),
+          ),
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 4,
+          children: [
+            TextButton.icon(
+              onPressed: saving ? null : () => _pick(slot),
+              icon: const Icon(Icons.image_outlined, size: 18),
+              label: Text(has ? 'Change' : 'Upload'),
+            ),
+            if (has)
+              TextButton.icon(
+                onPressed: saving ? null : () => _clear(slot, current),
+                icon: const Icon(Icons.hide_image_outlined, size: 18),
+                label: const Text('Remove'),
+                style: TextButton.styleFrom(foregroundColor: Q.red),
+              ),
+          ],
+        ),
+        Text(
+          err ?? hint,
+          textAlign: TextAlign.center,
+          style: body(
+            12,
+            color: err != null ? Theme.of(context).colorScheme.error : Q.text3,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   void dispose() {
@@ -388,8 +458,10 @@ class _GameDialogState extends State<_GameDialog> {
     );
     final saved = await context.read<GameFormCubit>().save(
       draft,
-      cover: _cover,
-      removeCover: _removeCover,
+      cover: _cover.file,
+      removeCover: _cover.remove,
+      banner: _banner.file,
+      removeBanner: _banner.remove,
     );
     if (saved != null && mounted) Navigator.of(context).pop(saved);
   }
@@ -428,53 +500,48 @@ class _GameDialogState extends State<_GameDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: SizedBox(
-                width: 240,
-                height: 128,
-                child: _coverBytes != null
-                    ? Image.memory(_coverBytes!, fit: BoxFit.cover)
-                    : _Art(
-                        mono: _mono.text.trim(),
-                        hue: _hue.text.trim(),
-                        deep: _deep.text.trim(),
-                        url: _removeCover ? null : g.coverUrl,
-                      ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
           Wrap(
             alignment: WrapAlignment.center,
-            spacing: 8,
+            spacing: 16,
+            runSpacing: 16,
+            crossAxisAlignment: WrapCrossAlignment.end,
             children: [
-              TextButton.icon(
-                onPressed: saving ? null : _pickCover,
-                icon: const Icon(Icons.image_outlined, size: 18),
-                label: Text(_hasCover ? 'Change cover' : 'Upload cover'),
-              ),
-              if (_hasCover)
-                TextButton.icon(
-                  onPressed: saving ? null : _clearCover,
-                  icon: const Icon(Icons.hide_image_outlined, size: 18),
-                  label: const Text('Remove'),
-                  style: TextButton.styleFrom(foregroundColor: Q.red),
+              SizedBox(
+                width: 150,
+                child: _imageSlot(
+                  title: 'Cover (portrait)',
+                  hint: 'Home screen grid, e.g. 800×1100',
+                  field: 'cover',
+                  slot: _cover,
+                  current: g.coverUrl,
+                  width: 110,
+                  height: 150,
+                  saving: saving,
+                  s: s,
                 ),
+              ),
+              SizedBox(
+                width: 260,
+                child: _imageSlot(
+                  title: 'Banner (landscape)',
+                  hint: 'Booking screen, e.g. 1200×640',
+                  field: 'banner',
+                  slot: _banner,
+                  current: g.bannerUrl,
+                  width: 240,
+                  height: 128,
+                  saving: saving,
+                  s: s,
+                ),
+              ),
             ],
           ),
+          const SizedBox(height: 4),
           Text(
-            s.errorFor('cover') ??
-                'Landscape PNG/JPG/WebP, max 5 MB. Without a cover the tile '
-                    'uses the short code and colours.',
+            'PNG/JPG/WebP, max 5 MB. Without images the app uses the short '
+            'code and colours.',
             textAlign: TextAlign.center,
-            style: body(
-              12,
-              color: s.errorFor('cover') != null
-                  ? Theme.of(context).colorScheme.error
-                  : Q.text3,
-            ),
+            style: body(12, color: Q.text3),
           ),
           const SizedBox(height: 16),
           AdminField(
@@ -617,4 +684,11 @@ class _GenrePicker extends StatelessWidget {
       ),
     ],
   );
+}
+
+/// An image picked in the game form, or a request to remove the current one.
+class _PickedImage {
+  XFile? file;
+  Uint8List? bytes;
+  bool remove = false;
 }

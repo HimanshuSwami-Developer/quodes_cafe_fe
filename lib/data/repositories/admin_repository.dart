@@ -116,6 +116,21 @@ class AdminRepository {
     return game(id);
   }
 
+  /// Uploads [file] as the game's landscape booking-screen banner.
+  Future<AdminGame> uploadGameBanner(int id, XFile file) => _one(
+    _api.upload<Map<String, dynamic>>(
+      '${_base}games/$id/banner/',
+      files: {'banner': file},
+    ),
+    AdminGame.fromJson,
+  );
+
+  /// Removes the banner; the booking screen falls back to the cover.
+  Future<AdminGame> removeGameBanner(int id) async {
+    await _api.delete('${_base}games/$id/banner/');
+    return game(id);
+  }
+
   // ---- Station types & stations ----
 
   Future<List<AdminStationType>> stationTypes() =>

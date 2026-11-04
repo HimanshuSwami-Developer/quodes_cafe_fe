@@ -7,14 +7,13 @@ import '../../../../theme/colors.dart';
 import '../../../../theme/game_art.dart';
 import '../../../../theme/theme.dart';
 
-/// Game card for the Games grid: neon frame in the game's colour, HUD corner
-/// brackets, scanlines over the artwork, genre + player badges, a play button
-/// and full platform names.
+/// Game card for the Games grid: full-bleed cover art with a bottom scrim
+/// carrying the title and a single line of meta (genre · players · platforms).
 class GameTile extends StatefulWidget {
   final Game game;
   final VoidCallback onTap;
 
-  /// Staggers the shine sweep across tiles.
+  /// Kept for API compatibility with the grid (was used to stagger effects).
   final int index;
   const GameTile({
     super.key,
@@ -23,9 +22,8 @@ class GameTile extends StatefulWidget {
     this.index = 0,
   });
 
-  /// Grid row height (art 128 + info panel).
-  static const double height = 252;
-  static const double _art = 128;
+  /// Grid row height (portrait poster).
+  static const double height = 240;
 
   @override
   State<GameTile> createState() => _GameTileState();
@@ -44,7 +42,8 @@ class _GameTileState extends State<GameTile> {
     final hue = hexColor(g.hue);
     final deep = hexColor(g.deep, Q.surface);
     final calm = MediaQuery.of(context).disableAnimations;
-    final radius = BorderRadius.circular(18);
+    final radius = BorderRadius.circular(14);
+    final players = g.maxPlayers > 1 ? '1–${g.maxPlayers} players' : '1 player';
 
     return Semantics(
       button: true,
@@ -58,173 +57,108 @@ class _GameTileState extends State<GameTile> {
         onTapCancel: () => _press(false),
         onTap: widget.onTap,
         child: AnimatedScale(
-          scale: _down && !calm ? 0.96 : 1,
+          scale: _down && !calm ? 0.97 : 1,
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOut,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
+          child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: radius,
-              border: Border.all(
-                color: hue.withValues(alpha: _down ? 0.95 : 0.55),
-                width: 1.5,
-              ),
-              boxShadow: [
+              boxShadow: const [
                 BoxShadow(
-                  color: hue.withValues(alpha: _down ? 0.55 : 0.28),
-                  blurRadius: _down ? 26 : 16,
-                  spreadRadius: _down ? 1 : -2,
+                  color: Color(0x59000000),
+                  blurRadius: 14,
+                  offset: Offset(0, 6),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16.5),
+              borderRadius: radius,
               child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  // Info panel background: dark, tinted with the game colour.
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Color.alphaBlend(
-                              hue.withValues(alpha: 0.22),
-                              Q.surface,
-                            ),
-                            Color.alphaBlend(
-                              hue.withValues(alpha: 0.08),
-                              const Color(0xFF0B1434),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  // Artwork covers the whole card.
+                  ColoredBox(
+                    color: deep,
+                    child: GameArt.has(g.mono, g.coverUrl)
+                        ? GameArt(
+                            g.mono,
+                            url: g.coverUrl,
+                            fit: BoxFit.cover,
+                            fallback: _Fallback(game: g, hue: hue, deep: deep),
+                          )
+                        : _Fallback(game: g, hue: hue, deep: deep),
                   ),
-                  // Artwork band.
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    height: GameTile._art,
-                    child: ColoredBox(
-                      color: deep,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          if (GameArt.has(g.mono, g.coverUrl))
-                            GameArt(
-                              g.mono,
-                              url: g.coverUrl,
-                              fallback: _Fallback(
-                                game: g,
-                                hue: hue,
-                                deep: deep,
-                              ),
-                            )
-                          else
-                            _Fallback(game: g, hue: hue, deep: deep),
-                          const CustomPaint(painter: _Scanlines()),
-                          // Fade the art into the info panel.
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                stops: const [0, 0.55, 1],
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.transparent,
-                                  Color.alphaBlend(
-                                    hue.withValues(alpha: 0.22),
-                                    Q.surface,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          CustomPaint(painter: _HudCorners(hue)),
-                          _Shine(
-                            delay: Duration(milliseconds: 600 * widget.index),
-                          ),
+                  // Bottom scrim for legible text.
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0, 0.45, 1],
+                        colors: [
+                          Color(0x00000000),
+                          Color(0x1A000000),
+                          Color(0xE6050A1C),
                         ],
                       ),
                     ),
                   ),
-                  // Genre tag.
+                  // Genre pill.
                   Positioned(
                     left: 10,
                     top: 10,
-                    child: _Badge(
-                      icon: _genreIcon(g.genre),
-                      text: g.genre,
-                      color: hue,
-                    ),
+                    child: _Pill(text: g.genre.toUpperCase()),
                   ),
-                  // Players.
-                  Positioned(
-                    right: 10,
-                    top: 10,
-                    child: _Badge(
-                      icon: Icons.group_rounded,
-                      text: g.maxPlayers > 1 ? '1–${g.maxPlayers}' : '1',
-                      color: hue,
-                      compact: true,
-                    ),
-                  ),
-                  // Play button on the seam between art and info.
-                  Positioned(
-                    right: 10,
-                    top: GameTile._art - 20,
-                    child: _PlayButton(hue: hue, active: _down),
-                  ),
-                  // Name + platforms.
+                  // Title + meta.
                   Positioned(
                     left: 12,
                     right: 12,
-                    top: GameTile._art + 6,
                     bottom: 12,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 40),
-                          child: Text(
-                            g.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style:
-                                display(
-                                  16,
-                                  color: Colors.white,
-                                  spacing: 0.01,
-                                ).copyWith(
-                                  height: 1.15,
-                                  shadows: [
-                                    Shadow(
-                                      color: hue.withValues(alpha: 0.6),
-                                      blurRadius: 10,
-                                    ),
-                                  ],
-                                ),
-                          ),
+                        Text(
+                          g.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: display(
+                            15,
+                            color: Colors.white,
+                          ).copyWith(height: 1.2),
                         ),
-                        const Spacer(),
-                        Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
+                        const SizedBox(height: 6),
+                        Row(
                           children: [
-                            for (var i = 0; i < g.platformNames.length; i++)
-                              _PlatformChip(
-                                name: g.platformNames[i],
-                                isPc:
-                                    i < g.platforms.length &&
-                                    g.platforms[i] == 'PC',
-                                hue: hue,
+                            Icon(
+                              Icons.group_rounded,
+                              size: 13,
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              players,
+                              style: body(
+                                11,
+                                color: Colors.white.withValues(alpha: 0.75),
+                                weight: FontWeight.w600,
                               ),
+                            ),
                           ],
                         ),
+                        if (g.platformNames.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            g.platformNames.join(' · '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: body(
+                              11,
+                              color: Colors.white.withValues(alpha: 0.55),
+                              weight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -238,172 +172,28 @@ class _GameTileState extends State<GameTile> {
   }
 }
 
-IconData _genreIcon(String genre) => switch (genre.toUpperCase()) {
-  'SHOOTER' => Icons.gps_fixed_rounded,
-  'SPORTS' => Icons.sports_soccer_rounded,
-  'RACING' => Icons.sports_motorsports_rounded,
-  'FIGHTING' => Icons.sports_mma_rounded,
-  'OPEN WORLD' => Icons.public_rounded,
-  'ACTION' => Icons.bolt_rounded,
-  _ => Icons.sports_esports_rounded,
-};
-
-class _Badge extends StatelessWidget {
-  const _Badge({
-    required this.icon,
-    required this.text,
-    required this.color,
-    this.compact = false,
-  });
-  final IconData icon;
+class _Pill extends StatelessWidget {
+  const _Pill({required this.text});
   final String text;
-  final Color color;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) => Container(
-    height: 22,
-    padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 7),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: const Color(0xD90A1330),
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: color.withValues(alpha: 0.7)),
+      color: const Color(0x99050A1C),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
     ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 12, color: _bright(color)),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: body(10, color: Q.text, weight: FontWeight.w800, spacing: 0.7),
-        ),
-      ],
+    child: Text(
+      text,
+      style: body(
+        9,
+        color: Colors.white,
+        weight: FontWeight.w700,
+        spacing: 0.8,
+      ),
     ),
   );
-}
-
-class _PlatformChip extends StatelessWidget {
-  const _PlatformChip({
-    required this.name,
-    required this.isPc,
-    required this.hue,
-  });
-  final String name;
-  final bool isPc;
-  final Color hue;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 20,
-    padding: const EdgeInsets.symmetric(horizontal: 6),
-    decoration: BoxDecoration(
-      color: const Color(0x660A1330),
-      borderRadius: BorderRadius.circular(5),
-      border: Border.all(color: Q.borderHi),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          isPc ? Icons.desktop_windows_rounded : Icons.sports_esports_rounded,
-          size: 11,
-          color: _bright(hue),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          name,
-          style: body(
-            10,
-            color: Q.text2,
-            weight: FontWeight.w700,
-            spacing: 0.2,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _PlayButton extends StatelessWidget {
-  const _PlayButton({required this.hue, required this.active});
-  final Color hue;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 160),
-    width: 40,
-    height: 40,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      color: active ? _bright(hue) : hue,
-      border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 2),
-      boxShadow: [
-        BoxShadow(
-          color: hue.withValues(alpha: 0.7),
-          blurRadius: active ? 20 : 12,
-        ),
-      ],
-    ),
-    child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
-  );
-}
-
-/// Lighter version of a game colour so icons stay readable on dark badges.
-Color _bright(Color c) {
-  final h = HSLColor.fromColor(c);
-  return h.withLightness(math.max(h.lightness, 0.62)).toColor();
-}
-
-/// Corner brackets like a HUD target frame.
-class _HudCorners extends CustomPainter {
-  const _HudCorners(this.color);
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = color.withValues(alpha: 0.9)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.square;
-    const inset = 6.0, len = 12.0;
-    final r = Rect.fromLTRB(
-      inset,
-      inset,
-      size.width - inset,
-      size.height - inset,
-    );
-    for (final (corner, dx, dy) in [
-      (r.topLeft, 1.0, 1.0),
-      (r.topRight, -1.0, 1.0),
-      (r.bottomLeft, 1.0, -1.0),
-      (r.bottomRight, -1.0, -1.0),
-    ]) {
-      canvas.drawLine(corner, corner.translate(len * dx, 0), p);
-      canvas.drawLine(corner, corner.translate(0, len * dy), p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _HudCorners old) => old.color != color;
-}
-
-/// Faint CRT scanlines.
-class _Scanlines extends CustomPainter {
-  const _Scanlines();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = const Color(0x14000000);
-    for (double y = 0; y < size.height; y += 3) {
-      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _Scanlines old) => false;
 }
 
 /// Games added in the admin panel have no artwork: painted pattern + code.
@@ -430,65 +220,6 @@ class _Fallback extends StatelessWidget {
         ),
       ),
     ],
-  );
-}
-
-/// The design's light sweep across a tile (`shine` keyframes, 4.5s loop).
-class _Shine extends StatefulWidget {
-  const _Shine({required this.delay});
-  final Duration delay;
-  @override
-  State<_Shine> createState() => _ShineState();
-}
-
-class _ShineState extends State<_Shine> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 4500),
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (MediaQuery.of(context).disableAnimations) {
-      _c.stop();
-    } else if (!_c.isAnimating) {
-      Future<void>.delayed(widget.delay, () {
-        if (mounted) _c.repeat();
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(
-    child: AnimatedBuilder(
-      animation: _c,
-      builder: (context, _) {
-        // Sweep across during the first 60% of the loop, then rest.
-        final t = Curves.easeInOut.transform((_c.value / 0.6).clamp(0, 1));
-        return FractionallySizedBox(
-          widthFactor: 0.4,
-          alignment: Alignment(-3 + 6 * t, 0),
-          child: const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Color(0x00FFFFFF),
-                  Color(0x1FFFFFFF),
-                  Color(0x00FFFFFF),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    ),
   );
 }
 

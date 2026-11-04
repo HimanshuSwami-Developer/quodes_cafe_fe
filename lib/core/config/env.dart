@@ -52,7 +52,7 @@ class AppConfig {
       Flavor.prod => const AppConfig(
         flavor: Flavor.prod,
         appName: 'Quodes Gaming',
-        apiBaseUrl: 'https://api.quodes.gg/api/',
+        apiBaseUrl: 'https://quodes-cafe-be.vercel.app/api/',
         httpLogging: false,
       ),
     };
@@ -68,10 +68,10 @@ class AppConfig {
   }
 
   static Flavor flavorFromDefine() {
-    const name = String.fromEnvironment('FLAVOR', defaultValue: 'local');
+    const name = String.fromEnvironment('FLAVOR');
     return Flavor.values.firstWhere(
       (f) => f.name == name,
-      orElse: () => Flavor.local,
+      orElse: () => Flavor.prod,
     );
   }
 }

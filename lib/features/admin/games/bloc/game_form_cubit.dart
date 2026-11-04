@@ -24,6 +24,8 @@ class GameFormCubit extends SaveCubit<AdminGame> {
     AdminGame draft, {
     XFile? cover,
     bool removeCover = false,
+    XFile? banner,
+    bool removeBanner = false,
   }) {
     if (draft.name.trim().isEmpty) {
       invalid(const {'name': 'Enter the game name.'});
@@ -39,6 +41,11 @@ class GameFormCubit extends SaveCubit<AdminGame> {
         game = await _repo.uploadGameCover(game.id, cover);
       } else if (removeCover && game.coverUrl != null) {
         game = await _repo.removeGameCover(game.id);
+      }
+      if (banner != null) {
+        game = await _repo.uploadGameBanner(game.id, banner);
+      } else if (removeBanner && game.bannerUrl != null) {
+        game = await _repo.removeGameBanner(game.id);
       }
       return game;
     });

@@ -186,6 +186,7 @@ class AdminGame extends Equatable {
     this.isActive = true,
     this.sort = 0,
     this.coverUrl,
+    this.bannerUrl,
   });
 
   AdminGame.fromJson(Map<String, dynamic> j)
@@ -201,6 +202,9 @@ class AdminGame extends Equatable {
       sort = _i(j['sort']),
       coverUrl = (j['cover_url'] as String?)?.isNotEmpty == true
           ? j['cover_url'] as String
+          : null,
+      bannerUrl = (j['banner_url'] as String?)?.isNotEmpty == true
+          ? j['banner_url'] as String
           : null;
 
   /// 0 for a game not saved yet.
@@ -214,6 +218,9 @@ class AdminGame extends Equatable {
 
   /// Tile image (set with its own upload call, never sent in [toJson]).
   final String? coverUrl;
+
+  /// Landscape booking-screen image (own upload call, like [coverUrl]).
+  final String? bannerUrl;
 
   bool get isNew => id == 0;
 
@@ -230,6 +237,7 @@ class AdminGame extends Equatable {
     isActive: isActive,
     sort: sort,
     coverUrl: coverUrl,
+    bannerUrl: bannerUrl,
   );
 
   Map<String, dynamic> toJson() => {
@@ -257,6 +265,7 @@ class AdminGame extends Equatable {
     isActive,
     sort,
     coverUrl,
+    bannerUrl,
   ];
 }
 
